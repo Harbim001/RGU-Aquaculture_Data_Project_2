@@ -1,0 +1,136 @@
+---
+title: "CMM535 Course Part 2"
+author: "Abimbola Ibirogba"
+date: "3/26/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Importing the 'escapesClean' data 
+
+```{r}
+escapesclean_data <- read.csv('escapesClean.csv')
+head(escapesclean_data)
+```
+
+#### Importing the necessary libaraies needed
+
+```{r}
+library(ggplot2)
+library(randomForest)
+library(MASS)
+library(pROC)
+```
+
+#### Applying a 80-20 Train-Test-Split 
+
+```{r}
+set.seed(233)
+train_merge <- sample(nrow(escapesclean_data), nrow(escapesclean_data)*.8)
+train <- escapesclean_data[train_merge,]
+test  <- escapesclean_data[-train_merge,]
+```
+
+#### Given two different causes for perdiction. 'Human' is encoded as '1' while 'Natural' is encoded as '0' 
+
+```{r}
+train[train$Cause == 'Natural', 'Cause'] <- 0
+train[train$Cause == 'Human' , 'Cause'] <- 1
+train$Cause <- as.factor(train$Cause)
+
+test[test$Cause == 'Natural' , 'Cause'] <- 0
+test[test$Cause == 'Human' , 'Cause'] <- 1
+test$Cause <- as.factor(test$Cause)
+```
+
+**MODEL 1 : LOGISTIC REGRESSION (predicting the cause)**
+
+```{r}
+Cause_prediction_glm = glm(Cause ~., data = train, family = "binomial")
+summary(Cause_prediction_glm )
+```
+
+#### Observation;
+
+According to the Trained Logistic Regression Model, if the escaped species is Salmon, the probability of the cause of escape being a Human increases (provided other factors constant) whereas if the Number of the escaped increases (provided other factors constant), the probability of the cause of escape being a Human decreases. The rest of the variables are statistically insignificant as the p-Value obtained from the t-test applied on the feature coefficients is more than 0.05.
+
+#### Performance Analysis of the Logistic Regression Model
+
+```{r}
+test_predict_probs <- predict(Cause_prediction_glm , newdata = test, type = "response")
+test_predictions <- ifelse(test_predict_probs > 0.5, 1, 0)
+confusion_matrix <- table(test$Cause, test_predictions)
+print(confusion_matrix)
+
+accuracy <- (confusion_matrix[1, 1] + confusion_matrix[2, 2])/nrow(test)
+print(paste0('Accuracy of the Logistic Regression Model: ', accuracy))
+
+roc(test$Cause ~ test_predict_probs, print.auc = TRUE, plot = TRUE)
+```
+#### Observation
+
+The Accuracy of the Logistic Regression Model is 71.11% on the Test Set. This means the Logistic Regression Model is able to correctly predict 71.11% of the instances in the Test Set. The AUC Score i.e., the measure of correctness of the predicted probabilities by the Logistic Regression Model is 0.659.
+
+**MODEL 2 : LINEAR DISCRIMINANT ANALYSIS (predicting the cause)**
+
+```{r}
+Cause_prediction_lda = lda(Cause ~., data = train)
+summary(Cause_prediction_lda )
+```
+#### Performance Analysis of  the Linear Discriminant Analysis
+
+```{r}
+test_predict_probs <- predict(Cause_prediction_lda , newdata = test)$posterior[, 1]
+test_predictions <- predict(Cause_prediction_lda , newdata = test)$class
+confusion_matrix <- table(test$Cause, test_predictions)
+print(confusion_matrix)
+
+accuracy <- (confusion_matrix[1, 1] + confusion_matrix[2, 2])/nrow(test)
+print(paste0('Accuracy of the Model: ', accuracy))
+
+roc(test$Cause ~ test_predict_probs, print.auc = TRUE, plot = TRUE)
+```
+
+#### Comparsion between the Logistic Regression Model
+
+The Accuracy of the LDA Model is 71.11% on the Test Set. This means the LDA Model is able to correctly predict 71.11% of the instances in the Test Set. The AUC Score i.e., the measure of correctness of the predicted probabilities by the LDA Model is 0.682. Now, in comparison to the Logistic Regression Model, the LDA Model is more effective although the Test Accuracy of both the models are similar but the predicted probabilities of the LDA Model are more accurate than that of the Logistic Regression Model. Hence, the Linear Discriminant Analysis Model is more effective than Logistic Regression in predicting the Cause of escape.
+
+**MODEL 3: LINEAR REGRESSION (predicting the Number)**
+
+```{r}
+number_prediction_lm = lm(Number ~., data = train)
+summary(number_prediction_lm)
+```
+#### According to the Trained Linear Regression Model, the following interpretations can be drawn up:
+
+* If the season of escape is Winter, the Number of escaped species increases by 18,260 (provided other factors are constant).
+* If the cause of escape is Human, the Number of escaped species decreases by 10,570 (provided other factors are constant).
+* If the SLR increases by 1 unit, the Number of escaped species increases by 5,136 (provided other factors are constant)
+* The other factors/features are statistically insignificant as the p-Value obtained from the t-test applied on the feature coefficients is more than 0.05.
+
+#### Performance Analysis of Linear Regression
+```{r}
+test_predictions <- predict(number_prediction_lm, newdata = test)
+print(paste0('R-squared Score of the Linear Regression Model on Test Set: ', cor(test$Number, test_predictions)**2))
+```
+#### Observation:
+
+The R-squared Score of the Linear Regression Model is 0.57. In other words, the goodness of fit or coefficient of determination of the Model is 0.57 i.e., the Linear Regression Model can explain 57% of the Total Variance in the Test Data.
+
+**MODEL 4: RANDOM FOREST REGRESSOR (predicting the Number)**
+```{r}
+set.seed(122)
+number_prediction_rf = randomForest(Number ~., data = train)
+summary(number_prediction_rf)
+```
+#### Performance Analysis of Random Forest Regression
+```{r}
+test_predictions <- predict(number_prediction_rf, newdata = test)
+print(paste0('R-squared Score of the Random Forest Regression Model on Test Set: ', cor(test$Number, test_predictions)**2))
+```
+#### Observation:
+
+The R-squared Score of the Random Forest Model is 0.676. In other words, the goodness of fit or coefficient of determination of the Model is 0.676 i.e., the Linear Regression Model can explain 67.6% of the Total Variance in the Test Data. So, comparing and contrasting it with the performance of the Linear Regression Model that yielded an R-squared Score of only 0.57, Random Forest Regression is a far superior model is predicting the Number of species escaped.
